@@ -746,7 +746,7 @@ bounds `[1158,1729][1414,2012]`（页面最右侧）。
 ### 复现真机调试命令
 
 ```bash
-export PATH="$PATH:$ANDROID_SDK/platform-tools"
+export PATH="$PATH:$ANDROID_SDK/platform-tools"   # 按你的 SDK 路径设置 ANDROID_SDK
 export MSYS_NO_PATHCONV=1   # Git Bash 必需，否则 /sdcard/ 会被转成 Windows 路径
 
 adb shell am start -n com.hilogic.babafarm/.ui.MainActivity
@@ -801,14 +801,14 @@ adb shell dumpsys alarm | grep -A2 babafarm
 
 ### 4. 构建环境（本机离线）
 
-- JDK：`<JDK17_PATH>`（Gradle 8.4 需要 JDK17，不能用默认的 JDK8）
+- JDK：**17**（Gradle 8.4 需要 JDK17，不能用默认的 JDK8）
 - 该环境无法写 `~/.gradle`，因此把缓存复制到工程内 `.gradle-home/`，并用 `.android-home/` 复用原 debug 签名；`local.properties` 的 `sdk.dir` 已修正转义。
 - 命令（PowerShell）：
   ```powershell
-  $env:JAVA_HOME='<JDK17_PATH>'
+  $env:JAVA_HOME='<JDK17 路径>'
   $env:GRADLE_USER_HOME='<工程>\.gradle-home'
   $env:ANDROID_USER_HOME='<工程>\.android-home'
-  $env:ANDROID_HOME='<ANDROID_SDK_PATH>'
+  $env:ANDROID_HOME='<Android SDK 路径>'
   gradle --offline assembleDebug
   ```
 

@@ -14,6 +14,10 @@
   python explore.py shot NAME         # 截图存到 .cache/NAME.png
   python explore.py wait SEC          # 等待
   python explore.py focus             # 只看前台 Activity
+
+环境变量（可选，避免把本机路径/序列号写进脚本）：
+  ADB          adb 可执行文件路径（默认使用 PATH 里的 adb）
+  ADB_SERIAL   设备序列号（默认不指定；只连一台设备时无需设置）
 """
 import re
 import subprocess
@@ -21,15 +25,20 @@ import sys
 import time
 import os
 
-ADB = r"adb"
-DEV = "YOUR_DEVICE_SERIAL"
+ADB = os.environ.get("ADB", "adb")
+SERIAL = os.environ.get("ADB_SERIAL", "")
 CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".cache")
 REMOTE = "/sdcard/_explore.xml"
 
 
+def adb_cmd(args):
+    """拼出 adb 命令；只有设置了 ADB_SERIAL 才带 -s 参数。"""
+    return [ADB] + (["-s", SERIAL] if SERIAL else []) + list(args)
+
+
 def sh(args, timeout=60):
     """执行 adb 命令（不走 shell，避免 Git Bash 路径转换）"""
-    cmd = [ADB, "-s", DEV] + args
+    cmd = adb_cmd(args)
     r = subprocess.run(cmd, capture_output=True, timeout=timeout)
     return r.stdout.decode("utf-8", errors="ignore")
 
@@ -139,7 +148,7 @@ def main():
         name = sys.argv[2] if len(sys.argv) > 2 else "shot"
         os.makedirs(CACHE, exist_ok=True)
         path = os.path.join(CACHE, name + ".png")
-        r = subprocess.run([ADB, "-s", DEV, "exec-out", "screencap", "-p"],
+        r = subprocess.run(adb_cmd(["exec-out", "screencap", "-p"]),
                            capture_output=True, timeout=60)
         with open(path, "wb") as f:
             f.write(r.stdout)

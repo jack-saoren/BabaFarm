@@ -47,8 +47,8 @@
 命令行构建（PowerShell）：
 
 ```powershell
-$env:JAVA_HOME='<JDK17_PATH>'
-$env:ANDROID_HOME='<ANDROID_SDK_PATH>'
+$env:JAVA_HOME='<JDK17 路径>'
+$env:ANDROID_HOME='<Android SDK 路径>'
 # 若本机 ~/.gradle 不可写，可用工程内 .gradle-home（见 DEPLOY.md 〇之四）
 $env:GRADLE_USER_HOME='<工程>\.gradle-home'
 $env:ANDROID_USER_HOME='<工程>\.android-home'

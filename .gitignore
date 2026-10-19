@@ -23,6 +23,10 @@ out/
 .cache/
 dsh-*.log
 
+# ---- Python ----
+__pycache__/
+*.py[cod]
+
 # ---- 系统 ----
 .DS_Store
 Thumbs.db

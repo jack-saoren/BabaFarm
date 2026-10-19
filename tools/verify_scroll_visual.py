@@ -6,21 +6,20 @@ import sys, os, re, time, subprocess
 sys.path.insert(0, os.getcwd())
 import explore
 
-DEVICE = "YOUR_DEVICE_SERIAL"
 RX_ROW = re.compile(r"^(.+?)\((\d+)/(\d+)\)$")
 LOCAL = os.path.join("..", ".cache")
 os.makedirs(LOCAL, exist_ok=True)
 
 
 def adb(*args):
-    return subprocess.run(["adb", "-s", DEVICE] + list(args),
+    return subprocess.run(explore.adb_cmd(list(args)),
                           capture_output=True, text=True, encoding="utf-8", errors="ignore").stdout
 
 
 def shot(name):
     out = os.path.abspath(os.path.join(LOCAL, "verify_%s.png" % name))
     with open(out, "wb") as f:
-        subprocess.run(["adb", "-s", DEVICE, "exec-out", "screencap", "-p"], stdout=f)
+        subprocess.run(explore.adb_cmd(["exec-out", "screencap", "-p"]), stdout=f)
     return out
 
 
