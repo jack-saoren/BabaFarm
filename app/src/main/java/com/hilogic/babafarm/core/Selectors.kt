@@ -505,7 +505,7 @@ object Selectors {
      * 而失败原因只是「恰好点到农场页底部的按钮栏」（见 openRandomNovel 注释），
      * 换个候选本来就能成。现在逐个试，进阅读页即停。
      */
-    val NOVEL_BOOK_TRY = 3
+    val NOVEL_BOOK_TRY = 4
 
     /**
      * 阅读页的两种浮层（实测四轮共 50+ 次翻页，规律稳定）：
@@ -542,8 +542,15 @@ object Selectors {
      */
     val NOVEL_CARD_TEXT_MARKS = listOf("人在读", "读至第")
 
-    /** 书籍列表区相对屏高的纵向范围（榜单 tab 在 10.66.40 里位于面板底部，列表在其上方）。 */
-    const val NOVEL_LIST_TOP_RATIO = 0.30f
+    /**
+     * 书籍列表区相对屏高的纵向范围。
+     *
+     * ⚠️ 2026-10-19 再次实测修正：面板顶部 y≈1034 有「小说/短剧/听书」三个 tab，
+     *    它们的可点容器也是**无文案**、尺寸与书卡相近，曾把「短剧」tab 当书卡点，
+     *    直接跳进短剧页。因此上边界从 0.30 提高到 0.36（y≈1065），避开 tab 行；
+     *    真正的「继续阅读」卡在 y≈1268，书单卡片在 y≈1734 以下。
+     */
+    const val NOVEL_LIST_TOP_RATIO = 0.40f
     const val NOVEL_LIST_BOTTOM_RATIO = 0.90f
 
     /**

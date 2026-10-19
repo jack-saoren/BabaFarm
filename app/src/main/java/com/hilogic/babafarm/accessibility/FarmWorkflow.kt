@@ -1067,6 +1067,10 @@ companion object {
 
         val todo = rows.filter { it.kind == TaskKind.BROWSE || it.kind == TaskKind.SEARCH_BROWSE }
         if (todo.isEmpty()) {
+            // 白名单一个都没命中时提醒：任务名每天会改写，白名单可能需要更新。
+            // （用户要求用完整名匹配，这是必然会遇到的维护点，所以必须让它可见。）
+            ScriptLog.w("  ⚠️ 白名单未命中任何任务 —— 面板任务名可能已改写，需更新 Selectors.TASK_NAME_WHITELIST")
+            ScriptLog.w("     当前白名单=${Selectors.TASK_NAME_WHITELIST}")
             ScriptLog.i("  没有符合「淘宝内」范围的任务，结束")
             return 0
         }
@@ -1074,12 +1078,6 @@ companion object {
         // 现改为「每做完一个就重新扫描一遍再筛」（见下方 while 循环）。
 
         var done = 0
-        // 白名单一个都没命中时提醒：任务名每天会改写，白名单可能需要更新。
-        // （用户要求用完整名匹配，这是必然会遇到的维护点，所以必须让它可见。）
-        if (rows.none { it.kind == TaskKind.BROWSE || it.kind == TaskKind.SEARCH_BROWSE }) {
-            ScriptLog.w("  ⚠️ 白名单未命中任何任务 —— 面板任务名可能已改写，需更新 Selectors.TASK_NAME_WHITELIST")
-            ScriptLog.w("     当前白名单=${Selectors.TASK_NAME_WHITELIST}")
-        }
         // ★ 每做完一个任务就重新扫描一遍全部任务、再筛一次。
         //
         // 为什么必须重扫：任务列表是【动态】的 ——
@@ -1854,6 +1852,14 @@ companion object {
         }
         ScriptLog.i("  已打开「看书剧领肥料」面板")
 
+        // ★ 2026-10-19 实测：点偏一次会切到「短剧」tab，且 tab 选择会被 H5 记住；
+        //   之后的「书卡」其实是短剧卡片，点进去就是短剧页。这里先切回「小说」tab。
+        if (!ensureNovelTab()) {
+            ScriptLog.w("  无法切换到「小说」tab，跳过看小说")
+            closeNovelPanel()
+            return
+        }
+
         if (!openRandomNovel()) {
             ScriptLog.w("  未找到可点的书籍，关闭面板")
             closeNovelPanel()
@@ -1934,25 +1940,72 @@ companion object {
      *  - 面板打开后书单还会先显示「加载中」，不能打开就立刻扫。
      * 因此这里：① 等书单加载；② 用新布局筛卡片；③ 逐个试，进阅读页即停。
      */
+    /**
+     * 确保「看书剧领肥料」面板停留在「小说」tab。
+     *
+     * ⚠️ 2026-10-19 实测：
+     *  - 面板里的「小说/短剧/听书」三个 tab 文案节点本身 **clickable=false**，
+     *    可点容器是无文案的父节点；所以不能用 findClickableByExactText 找 tab，
+     *    必须取 tab 文案节点的 bounds 中心，用真实手势点击。
+     *  - 一旦停在「短剧」tab，H5 会记住选择，之后所有「书卡」点击都会进短剧页。
+     *  - 切换后用「推荐榜/完结榜…」或「读至第」判断是否真的回到了小说 tab。
+     *
+     * @return true = 已确认在「小说」tab
+     */
+    private fun ensureNovelTab(): Boolean {
+        repeat(2) { attempt ->
+            val tabText = Locator.findFirstByTexts(svc, listOf("小说"), timeoutMs = 1200L)
+            if (tabText == null) {
+                ScriptLog.w("  未找到「小说」tab 文案（第 ${attempt + 1} 次）")
+                return false
+            }
+            val r = Rect()
+            tabText.getBoundsInScreen(r)
+            if (r.isEmpty) return false
+            ScriptLog.i("  点「小说」tab @(${r.centerX()},${r.centerY()})")
+            Locator.tap(svc, r.centerX(), r.centerY())
+            SystemClock.sleep(1500)
+            // 小说 tab 的内容特征：榜单 tab 文案、或「读至第X章」
+            val ok = Locator.pageContainsAny(svc, *Selectors.NOVEL_RANK_TABS.toTypedArray()) ||
+                    Locator.pageContainsAny(svc, "读至第")
+            if (ok) return true
+            ScriptLog.w("  切换后仍不像小说 tab（第 ${attempt + 1} 次）")
+        }
+        return false
+    }
+
     private fun openRandomNovel(): Boolean {
-        val cards = waitNovelCards(NOVEL_CARDS_WAIT_MS)
-        if (cards.isEmpty()) {
+        // 等书单稳定（连续两次采样卡片数一致），避免拿到「加载中」阶段的旧 bounds。
+        if (waitNovelCards(NOVEL_CARDS_WAIT_MS).isEmpty()) {
             ScriptLog.w("  书籍列表区等待 ${NOVEL_CARDS_WAIT_MS / 1000}s 仍无可点卡片")
             ScriptLog.w("  现场快照=${Locator.dumpTexts(svc).take(200)}")
             return false
         }
-        val shuffled = cards.shuffled()
-        val tryCount = minOf(Selectors.NOVEL_BOOK_TRY, shuffled.size)
-        for (i in 0 until tryCount) {
-            val pick = shuffled[i]
+        val tried = HashSet<String>()
+        var attempts = 0
+        while (attempts < Selectors.NOVEL_BOOK_TRY && !blocked) {
+            // ★ 每次点击前重新扫描：面板是 H5，卡片加载/重排后旧节点 bounds 会失效，
+            //   沿用旧坐标会点偏（实测曾点进「短剧」页）。
+            val cards = novelCards()
+            if (cards.isEmpty()) {
+                ScriptLog.w("  当前面板没有可点书卡，放弃")
+                return false
+            }
+            val pick = cards.firstOrNull { node ->
+                val rr = Rect()
+                node.getBoundsInScreen(rr)
+                !tried.contains("${rr.centerX()},${rr.centerY()}")
+            } ?: break
             val r = Rect(); pick.getBoundsInScreen(r)
+            tried.add("${r.centerX()},${r.centerY()}")
+            attempts++
             Locator.tapNode(svc, pick)
             if (waitNovelReader(NOVEL_READER_WAIT_MS)) {
                 ScriptLog.i("  点书 @(${r.centerX()},${r.centerY()}) 进入阅读页" +
-                        "（第 ${i + 1} 次尝试，候选 ${cards.size} 个）")
+                        "（第 $attempts 次尝试，当前候选 ${cards.size} 个）")
                 return true
             }
-            ScriptLog.w("  第 ${i + 1} 次点击 @(${r.centerX()},${r.centerY()}) 未进阅读页，换一本")
+            ScriptLog.w("  第 $attempts 次点击 @(${r.centerX()},${r.centerY()}) 未进阅读页，换一本")
             logNovelWhereAmI()
             if (!isNovelPanelOpen()) {
                 // 已离开面板（可能被点进了别的页），按返回再试下一本
@@ -1960,15 +2013,17 @@ companion object {
                 Locator.pressBack(svc)
                 SystemClock.sleep(2500)
                 if (!isNovelPanelOpen()) {
-                    ScriptLog.w("  返回后面板仍未回来，放弃剩余 ${tryCount - i - 1} 次尝试")
+                    ScriptLog.w("  返回后面板仍未回来，放弃")
                     return false
                 }
+                // 返回后面板可能停在「短剧」tab，切回「小说」再继续
+                if (!ensureNovelTab()) return false
             } else {
                 // 还在面板上 —— 说明只是没点中书，直接换下一本，【不要按返回】
                 ScriptLog.w("  仍在面板上（未跳走），直接换下一本")
             }
         }
-        ScriptLog.w("  连试 $tryCount 本都没进阅读页，放弃")
+        ScriptLog.w("  连试 $attempts 本都没进阅读页，放弃")
         return false
     }
 
@@ -1982,15 +2037,22 @@ companion object {
         return false
     }
 
-    /** 等待书单加载出可点卡片（轮询；返回空表示超时）。 */
+    /**
+     * 等待书单卡片加载稳定。
+     *
+     * 面板打开后书单先显示「加载中」，卡片是分批渲染的；只等「第一次出现卡片」
+     * 会拿到布局尚未稳定的旧节点，点击会点偏。这里要求连续两次采样数量一致。
+     */
     private fun waitNovelCards(timeoutMs: Long): List<AccessibilityNodeInfo> {
         val deadline = SystemClock.uptimeMillis() + timeoutMs
+        var lastCount = -1
         while (SystemClock.uptimeMillis() < deadline) {
             val cards = novelCards()
-            if (cards.isNotEmpty()) return cards
-            SystemClock.sleep(1000)
+            if (cards.isNotEmpty() && cards.size == lastCount) return cards
+            lastCount = cards.size
+            SystemClock.sleep(1200)
         }
-        return emptyList()
+        return novelCards()
     }
 
     /** 等待进入阅读页（轮询）。 */
@@ -2006,24 +2068,26 @@ companion object {
     /**
      * 收集当前「看书剧领肥料」面板里的书籍卡片。
      *
-     * 10.66.40 实测：
-     *  - 可点卡片带文案（含「人在读」/「读至第」），尺寸约 294x532；
-     *  - 榜单 tab 在面板底部（y≈2689），因此书单范围是「屏高 30% ~ 榜单上边界」；
-     *  - 面板盖在农场页之上，农场页底部按钮（一起种/集肥料/施肥…）仍在树里，
-     *    必须用文案特征 + 黑名单排除，否则会点到它们。
+     * 2026-10-19 实测（淘宝 10.66.40）：
+     *  - 顶部 y≈1034 是「小说 / 短剧 / 听书」tab，它们的可点容器也是**空文案**，
+     *    且尺寸与书卡相近 —— 必须靠上边界避开（否则会点进短剧页）。
+     *  - 「继续阅读」卡片在 y≈1268；书单卡片在 y≈1734 以下；
+     *  - 榜单 tab（推荐榜…）的位置不固定（有时在书单上方，有时在底部），
+     *    因此**不能**再用「榜单上边界」当书单下边界（会把书单整段裁掉）。
+     *  - 面板盖在农场页之上，农场页底部按钮仍在树里，用文案特征 + 黑名单排除。
+     *
+     * 优先返回带文案的书籍卡片；没有时退回「屏幕下半部分」的空文案卡片。
      */
     private fun novelCards(): List<AccessibilityNodeInfo> {
         val root = svc.rootInActiveWindow ?: return emptyList()
         val m = svc.resources.displayMetrics
-        val yFrom = (m.heightPixels * Selectors.NOVEL_LIST_TOP_RATIO).toInt()
-        val rankTop = rankTabsTopY()
-        val yTo = minOf(
-            (m.heightPixels * Selectors.NOVEL_LIST_BOTTOM_RATIO).toInt(),
-            (rankTop - 10).coerceAtLeast((m.heightPixels * 0.5f).toInt())
-        )
+        val h = m.heightPixels
+        val yFrom = (h * Selectors.NOVEL_LIST_TOP_RATIO).toInt()
+        val yTo = (h * Selectors.NOVEL_LIST_BOTTOM_RATIO).toInt()
         val xFrom = (m.widthPixels * 0.05f).toInt()
         val xTo = (m.widthPixels * 0.95f).toInt()
-        val out = ArrayList<AccessibilityNodeInfo>()
+        val bookCards = ArrayList<AccessibilityNodeInfo>()
+        val emptyCards = ArrayList<AccessibilityNodeInfo>()
         fun walk(n: AccessibilityNodeInfo, depth: Int) {
             if (depth > 30) return
             val rect = Rect()
@@ -2036,15 +2100,27 @@ companion object {
                 val label = (n.text?.toString().orEmpty() + " " +
                         n.contentDescription?.toString().orEmpty()).trim()
                 val isBook = Selectors.NOVEL_CARD_TEXT_MARKS.any { label.contains(it) }
-                val isFarmNoise = Selectors.FARM_BLACKLIST_TEXTS.any { label.contains(it) } ||
-                        label.contains("肥料") || label.contains("下单") || label.contains("¥")
-                // 书名卡片带「人在读/读至第」；另保留无文案的空容器（部分「继续阅读」卡片）
-                if (!isFarmNoise && (isBook || label.isEmpty())) out.add(n)
+                val isNoise = Selectors.FARM_BLACKLIST_TEXTS.any { label.contains(it) } ||
+                        label.contains("肥料") || label.contains("下单") || label.contains("¥") ||
+                        label.contains("短剧") || label.contains("听书") || label.contains("小说") ||
+                        Selectors.NOVEL_RANK_TABS.any { label.contains(it) }
+                when {
+                    isNoise -> Unit
+                    isBook -> bookCards.add(n)
+                    label.isEmpty() -> emptyCards.add(n)
+                }
             }
             for (i in 0 until n.childCount) n.getChild(i)?.let { walk(it, depth + 1) }
         }
         walk(root, 0)
-        return out
+        if (bookCards.isNotEmpty()) return bookCards
+        // 无文案容器：优先屏幕下半部分（书单区），避开顶部「继续阅读」区
+        val lower = emptyCards.filter { node ->
+            val rr = Rect()
+            node.getBoundsInScreen(rr)
+            rr.centerY() > h * 0.5f
+        }
+        return if (lower.isNotEmpty()) lower else emptyCards
     }
 
     /**
@@ -2062,22 +2138,6 @@ companion object {
         ScriptLog.w("    快照=" + snapshot.take(160))
     }
 
-    /**
-     * 榜单 Tab 区的上边界。
-     *
-     * ⚠️ 2026-10-19 实测淘宝 10.66.40：榜单 tab（推荐榜/完结榜…）已经移到
-     * 面板【底部】(y≈2689)，书籍列表在其【上方】。旧实现取「榜单下边界」当书单
-     * 上界，会得到空区间，导致「书籍列表区没有找到可点的卡片」。
-     */
-    private fun rankTabsTopY(): Int {
-        val m = svc.resources.displayMetrics
-        val fallback = (m.heightPixels * 0.88f).toInt()
-        val tab = Locator.findFirstByTexts(svc, Selectors.NOVEL_RANK_TABS, timeoutMs = 600L)
-            ?: return fallback
-        val r = Rect()
-        tab.getBoundsInScreen(r)
-        return if (r.isEmpty) fallback else r.top
-    }
 
     /** 关掉阅读页的新手引导蒙层（实测文案「点击中间 呼出菜单」，点屏幕中部即可）。 */
     private fun dismissNovelGuide() {
