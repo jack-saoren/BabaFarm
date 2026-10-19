@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 简化的果树/水滴造型，避免引入位图资源 -->
+    <path
+        android:fillColor="#FF6A00"
+        android:pathData="M54,26m-9,0a9,9 0,1 1,18 0a9,9 0,1 1,-18 0" />
+    <path
+        android:fillColor="#2E7D32"
+        android:pathData="M34,58c0,-11 9,-20 20,-20s20,9 20,20c0,14 -9,26 -20,26S34,72 34,58z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M46,58c0,-5 4,-9 8,-9s8,4 8,9c0,6 -4,11 -8,11s-8,-5 -8,-11z" />
+</vector>

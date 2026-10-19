@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">芭芭农场助手</string>
+    <string name="accessibility_label">芭芭农场助手</string>
+    <string name="accessibility_summary">自动执行芭芭农场日常任务</string>
+    <string name="accessibility_description">开启后可用于自动操作淘宝芭芭农场：进入页面、施肥、收取肥料、领取任务奖励。不会收集或上传任何个人信息。</string>
+</resources>

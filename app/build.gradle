@@ -1,0 +1,48 @@
+plugins {
+    id 'com.android.application'
+    // 必须显式应用 Kotlin 插件，否则 android{ kotlinOptions{} } 扩展不存在
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'com.hilogic.babafarm'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.hilogic.babafarm"
+        minSdk 24
+        //刻意停留在 28（Android 9）：
+        // 1) 锁死 Android 9 的后台/无障碍行为，避免升级 targetSdk 后被 Android 10+ 的
+        //    后台启动 Activity 限制打断（我们依赖后台拉起淘宝这一关键路径）；
+        // 2) 保持 doze / 后台执行限制的判定口径与目标机型一致，便于现场定位问题。
+        targetSdk 28
+        versionCode 1
+        versionName "1.0.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core-ktx:1.9.0'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.9.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+}

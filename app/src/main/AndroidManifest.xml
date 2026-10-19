@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- 开机自启，恢复每日闹钟（核心：重启后定时器必须能自动重建） -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <!-- 脚本执行期前台服务，保活 + 避免后台被杀 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <!-- 唤醒锁：灭屏状态下照样跑完流程 -->
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <!-- 申请加入电池优化白名单，规避 Doze 对 AlarmManager 的压制 -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
+    <!-- Android 11+ 包可见性：定位淘宝包名。
+         tools:ignore 必须声明在根 manifest 节点上（见文件头），不能写在 uses-permission 上。 -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission"/>
+
+    <application
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.BabaFarm">
+
+        <!-- 主界面：状态、开关、手动触发、日志查看 -->
+        <activity
+            android:name=".ui.MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+
+        <!-- 前台保活服务 -->
+        <service
+            android:name=".service.FarmForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync"/>
+
+        <!-- 无障碍服务：真正的 UI 自动化执行体 -->
+        <service
+            android:name=".accessibility.FarmAccessibilityService"
+            android:exported="true"
+            android:label="@string/accessibility_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config"/>
+        </service>
+
+        <!-- 开机广播：重排每日闹钟
+             注意：不声明 directBootAware（即 false），因此不要挂 LOCKED_BOOT_COMPLETED，
+             否则部分机型在未解锁的 direct boot 阶段会漏发 BOOT_COMPLETED，导致闹钟丢失。 -->
+        <receiver
+            android:name=".receiver.BootReceiver"
+            android:exported="true">
+            <intent-filter android:priority="1000">
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+            </intent-filter>
+        </receiver>
+
+        <!-- 闹钟广播：到点触发脚本 -->
+        <receiver
+            android:name=".receiver.AlarmReceiver"
+            android:exported="false"/>
+
+    </application>
+
+</manifest>

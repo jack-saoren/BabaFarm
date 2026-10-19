@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  无障碍服务能力声明。
+
+  三个关键配置说明：
+  1) android:accessibilityEventTypes
+     必须包含 typeWindowStateChanged（页面切换）+ typeWindowContentChanged（元素变化）。
+     淘宝/芭芭农场是 H5，节点常在动画中途才挂载，只监听 windowStateChanged 会漏掉按钮，
+     因此必须开 contentChanged 事件做轮询补充。
+  2) android:canRetrieveWindowContent="true"
+     无障碍读取节点树的前提，缺它 findAccessibilityNodeInfosByText 永远返回空。
+  3) android:notificationTimeout="50"
+     事件回调的静默期。取小值以获得更实时的节点通知（毫秒），代价是电量略高。
+     本应用每天只跑一次，实时性优先于省电。
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeViewClicked|typeViewFocused|typeViewScrolled"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagDefault|flagIncludeNotImportantViews|flagReportViewIds|flagRetrieveInteractiveWindows"
+    android:canPerformGestures="true"
+    android:canRetrieveWindowContent="true"
+    android:description="@string/accessibility_description"
+    android:notificationTimeout="50"
+    android:settingsActivity="com.hilogic.babafarm.ui.MainActivity"
+    android:summary="@string/accessibility_summary"/>

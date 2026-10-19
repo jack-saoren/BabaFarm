@@ -1,0 +1,9 @@
+# 仓库内统一 LF，Windows 脚本除外
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.jar binary
+*.apk binary
+*.png binary
+*.jpg binary
+*.webp binary
